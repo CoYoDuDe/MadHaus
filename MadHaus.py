@@ -42,6 +42,14 @@ def turn_on_light():
 def turn_off_light():
     GPIO.output(light_relay, GPIO.LOW)
 
+def flicker_light(duration):
+    end_time = time.time() + duration
+    while time.time() < end_time:
+        GPIO.output(light_relay, GPIO.LOW)
+        time.sleep(random.uniform(0.05, 0.2))
+        GPIO.output(light_relay, GPIO.HIGH)
+        time.sleep(random.uniform(0.05, 0.2))
+
 def activate_pneumatic_cylinder():
     GPIO.output(pneumatic_cylinder, GPIO.HIGH)
 
