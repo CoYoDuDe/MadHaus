@@ -1,6 +1,4 @@
-# MadHaus
-
-# Haunted Swing Steuerung
+# MadHaus Steuerung
 
 Dieses Projekt steuert ein MadHaus, das sich dreht und gleichzeitig eine interne Schaukel bewegt. Die Steuerung erfolgt über einen Raspberry Pi, der verschiedene Sensoren und Aktoren überwacht und ansteuert. Es gibt Start-, Stopp- und Not-Aus-Taster.
 
