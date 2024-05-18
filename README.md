@@ -266,67 +266,79 @@ def main():
         while True:
             # Warte auf Start-Taste
             if GPIO.input(start_button) == GPIO.LOW:
-                print("Start-Taste gedrückt. Vorgang beginnt...")
-
-                # Deaktiviere Bremse und überprüfe den Zustand
-                deactivate_brake()
-                time.sleep(1)  # Wartezeit zum Öffnen der Bremse
-                if check_brake_status() != 'open':
-                    print("Bremse nicht geöffnet. Vorgang abgebrochen.")
-                    continue
-
-                turn_count = 0
-                direction = 'right'
-                running = True
-
-                while running:
-                    # Überprüfen des Not-Aus-Tasters
-                    if GPIO.input(emergency_stop) == GPIO.LOW:
-                        print("Not-Aus-Taste gedrückt. Vorgang wird gestoppt.")
+                print("Start-Taste gedrückt. Überprüfung beginnt...")
+                
+                # Warte 3 Sekunden und prüfe, ob der Start-Button noch gedrückt ist
+                start_time = time.time()
+                while (time.time() - start_time) < 3:
+                    if GPIO.input(start_button) != GPIO.LOW:
+                        print("Start-Taste nicht mehr gedrückt. Vorgang abgebrochen.")
                         break
+                    time.sleep(0.1)
+                
+                # Falls die Start-Taste 3 Sekunden lang gedrückt blieb, starte den Vorgang
+                if GPIO.input(start_button) == GPIO.LOW:
+                    print("Start-Taste bestätigt. Vorgang beginnt...")
 
-                    # Überprüfen des Stop-Tasters
-                    if GPIO.input(stop_button) == GPIO.LOW:
-                        print("Stop-Taste gedrückt. Vorgang wird gestoppt.")
-                        running = False
-                        break
+                    # Deaktiviere Bremse und überprüfe den Zustand
+                    deactivate_brake()
+                    time.sleep(1)  # Wartezeit zum Öffnen der Bremse
+                    if check_brake_status() != 'open':
+                        print("Bremse nicht geöffnet. Vorgang abgebrochen.")
+                        continue
 
-                    # Drehe das Haus in die aktuelle Richtung
-                    if direction == 'right':
-                        print("Drehe das Haus nach rechts...")
-                        turn_house_right()
-                    else:
-                        print("Drehe das Haus nach links...")
-                        turn_house_left()
+                    turn_count = 0
+                    direction = 'right'
+                    running = True
 
-                    # Normale Schaukel-Routine starten
-                    normal_swing_routine()
+                    while running:
+                        # Überprüfen des Not-Aus-Tasters
+                        if GPIO.input(emergency_stop) == GPIO.LOW:
+                            print("Not-Aus-Taste gedrückt. Vorgang wird gestoppt.")
+                            break
 
-                    # Warte, bis das Haus die gekippte Position erreicht
-                    while check_house_position() not in ['tilted_right', 'tilted_left']:
-                        time.sleep(0.1)
+                        # Überprüfen des Stop-Tasters
+                        if GPIO.input(stop_button) == GPIO.LOW:
+                            print("Stop-Taste gedrückt. Vorgang wird gestoppt.")
+                            running = False
+                            break
 
-                    # Überkopfposition erreicht (15 Grad)
-                    if check_house_position() in ['tilted_right', 'tilted_left']:
-                        print("Haus ist über Kopf. Starte Schaukel-Routine bei 15 Grad...")
-                        swing_routine_15_degrees(direction)
+                        # Drehe das Haus in die aktuelle Richtung
+                        if direction == 'right':
+                            print("Drehe das Haus nach rechts...")
+                            turn_house_right()
+                        else:
+                            print("Drehe das Haus nach links...")
+                            turn_house_left()
 
-                        # Wechsel der Richtung nach zwei Umdrehungen
-                        if turn_count >= 2:
-                            print("Richtung wechseln...")
-                            stop_turning()
-                            while check_house_position() != 'upright':
-                                time.sleep(0.1)
-                            direction = 'left' if direction == 'right' else 'right'
-                            turn_count = 0
+                        # Normale Schaukel-Routine starten
+                        normal_swing_routine()
 
-                    # Warte, bis das Haus wieder aufrecht steht
-                    while check_house_position() != 'upright':
-                        time.sleep(0.1)
-                    stop_turning()
+                        # Warte, bis das Haus die gekippte Position erreicht
+                        while check_house_position() not in ['tilted_right', 'tilted_left']:
+                            time.sleep(0.1)
 
-                    # Erhöhe die Drehzahl nach jeder zweiten Drehung
-                    turn_count += 1
+                        # Überkopfposition erreicht (15 Grad)
+                        if check_house_position() in ['tilted_right', 'tilted_left']:
+                            print("Haus ist über Kopf. Starte Schaukel-Routine bei 15 Grad...")
+                            swing_routine_15_degrees(direction)
+
+                            # Wechsel der Richtung nach zwei Umdrehungen
+                            if turn_count >= 2:
+                                print("Richtung wechseln...")
+                                stop_turning()
+                                while check_house_position() != 'upright':
+                                    time.sleep(0.1)
+                                direction = 'left' if direction == 'right' else 'right'
+                                turn_count = 0
+
+                        # Warte, bis das Haus wieder aufrecht steht
+                        while check_house_position() != 'upright':
+                            time.sleep(0.1)
+                        stop_turning()
+
+                        # Erhöhe die Drehzahl nach jeder zweiten Drehung
+                        turn_count += 1
 
                 print("Vorgang abgeschlossen. Haus ist zurück in der Ausgangsposition.")
                 
