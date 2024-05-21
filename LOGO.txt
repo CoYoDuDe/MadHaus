@@ -1,0 +1,123 @@
+// Deklaration der internen Variablen
+VAR
+    M1 : BOOL; // Prozess läuft
+    M2 : BOOL; // Not-Aus aktiviert
+    M3 : BOOL; // Schaukel rechts erreicht
+    M4 : BOOL; // Schaukel in der Mitte
+    M5 : BOOL; // Schaukel links erreicht
+    M6 : BOOL; // Haus aufrecht
+    M7 : BOOL; // Haus nach links geneigt
+    M8 : BOOL; // Haus nach rechts geneigt
+    Direction : BOOL; // TRUE = rechts, FALSE = links
+    Turn_Count : INT; // Umdrehungszähler
+END_VAR
+
+// Licht einschalten
+LD     Start_Button
+=      Light_Relay
+
+// Startprozess
+LD     Start_Button
+LDN    Emergency_Stop
+LDN    Stop_Button
+=      M1       // Prozess läuft
+
+// Not-Aus
+LD     Emergency_Stop
+=      M2       // Not-Aus aktiviert
+
+// Prozess stoppen
+LD     Stop_Button
+=      M2       // Stopp aktiviert
+
+// Wenn M2 aktiv ist, schalte das Relais aus
+LD     M2
+=      Relay_Turn_Right
+=      Relay_Turn_Left
+=      Pneumatic_Cylinder
+=      Brake_Cylinder
+
+// Bremse deaktivieren, wenn der Prozess läuft
+LD     M1
+=      Brake_Cylinder
+
+// Haus drehend
+LD     M1
+LDN    T5
+TON    T5, 1s
+LD     T5
+LD     Direction
+=      Relay_Turn_Right
+LDN    Direction
+=      Relay_Turn_Left
+
+// Normale Schaukel-Routine
+LD     M1
+TON    T1, 3s
+LD     T1
+=      Pneumatic_Cylinder
+
+LD     Swing_Right_Switch
+=      M3      // Schaukel rechts erreicht
+
+LD     Swing_Middle_Switch
+=      M4      // Schaukel in der Mitte
+
+LD     Swing_Left_Switch
+=      M5      // Schaukel links erreicht
+
+LD     M3
+LDN    T2
+TON    T2, 3s
+LD     T2
+=      Pneumatic_Cylinder
+
+LD     M4
+TON    T3, 3s
+LD     T3
+LDN    M5
+TON    T4, 3s
+LD     T4
+=      Pneumatic_Cylinder
+
+// Schaukel-Routine bei 15 Grad
+LD     House_Right_Switch
+=      M8       // Haus nach rechts geneigt
+
+LD     House_Left_Switch
+=      M7       // Haus nach links geneigt
+
+LD     M7
+TON    T6, 3s
+LD     T6
+=      Pneumatic_Cylinder
+
+LD     M4
+TON    T7, 3s
+LD     T7
+LDN    M5
+TON    T8, 3s
+LD     T8
+=      Pneumatic_Cylinder
+
+LD     M5
+TON    T9, 3s
+LD     T9
+=      Pneumatic_Cylinder
+
+// Richtung wechseln nach zwei Umdrehungen
+LD     House_Right_Switch
+LD     House_Left_Switch
+CTU    C1, 2
+LD     C1
+=      Direction
+
+// Hausposition prüfen
+LD     House_Left_Switch
+LD     House_Right_Switch
+=      M6       // Haus aufrecht
+
+// Vorgang abschließen
+LD     M6
+LD     M4
+=      Brake_Cylinder
