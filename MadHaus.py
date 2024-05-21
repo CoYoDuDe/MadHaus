@@ -184,7 +184,7 @@ def main():
             # Warte auf Start-Taste
             if GPIO.input(start_button) == GPIO.LOW:
                 print("Start-Taste gedrückt. Überprüfung beginnt...")
-                
+
                 # Warte 3 Sekunden und prüfe, ob der Start-Button noch gedrückt ist
                 start_time = time.time()
                 while (time.time() - start_time) < 3:
@@ -192,7 +192,7 @@ def main():
                         print("Start-Taste nicht mehr gedrückt. Vorgang abgebrochen.")
                         break
                     time.sleep(0.1)
-                
+
                 # Falls die Start-Taste 3 Sekunden lang gedrückt blieb, starte den Vorgang
                 if GPIO.input(start_button) == GPIO.LOW:
                     print("Start-Taste bestätigt. Vorgang beginnt...")
