@@ -131,6 +131,7 @@ IF start_button THEN
 
             (* Überkopfposition erreicht *)
             IF house_position IN ['tilted_right', 'tilted_left'] THEN
+                (* 15-Grad-Routine starten *)
                 pneumatic_cylinder := TRUE;
                 start_time := TIME();
                 WHILE TIME() - start_time < T#3S DO
