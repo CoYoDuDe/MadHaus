@@ -1,185 +1,185 @@
-(* Deklaration der Variablen *)
+// Schneider Electric TM172 Code
+
+PROGRAM Main
 VAR
-    house_left_switch : BOOL; (* DI1 *)
-    house_right_switch : BOOL; (* DI2 *)
-    swing_left_switch : BOOL; (* DI3 *)
-    swing_right_switch : BOOL; (* DI4 *)
-    swing_middle_switch : BOOL; (* DI5 *)
-    pneumatic_cylinder : BOOL; (* DO1 *)
-    relay_turn_right : BOOL; (* DO2 *)
-    relay_turn_left : BOOL; (* DO3 *)
-    start_button : BOOL; (* DI6 *)
-    stop_button : BOOL; (* DI7 *)
-    emergency_stop : BOOL; (* DI8 *)
-    brake_cylinder : BOOL; (* DO4 *)
-    brake_switch : BOOL; (* DI9 *)
-    light_relay : BOOL; (* DO5 *)
-    turn_count : INT;
-    direction : BOOL; (* TRUE = right, FALSE = left *)
-    running : BOOL;
+    house_left_switch AT %I0.0 : BOOL;
+    house_right_switch AT %I0.1 : BOOL;
+    swing_left_switch AT %I0.2 : BOOL;
+    swing_right_switch AT %I0.3 : BOOL;
+    swing_middle_switch AT %I0.4 : BOOL;
+    pneumatic_cylinder AT %Q0.0 : BOOL;
+    relay_turn_right AT %Q0.1 : BOOL;
+    relay_turn_left AT %Q0.2 : BOOL;
+    start_button AT %I0.5 : BOOL;
+    stop_button AT %I0.6 : BOOL;
+    emergency_stop AT %I0.7 : BOOL;
+    brake_cylinder AT %Q0.3 : BOOL;
+    brake_switch AT %I0.8 : BOOL;
+    light_relay AT %Q0.4 : BOOL;
+    turn_count : INT := 0;
+    direction : BOOL := TRUE; (* TRUE = right, FALSE = left *)
+    running : BOOL := FALSE;
     start_time : TIME;
     current_time : TIME;
-    swing_position : STRING;
-    house_position : STRING;
-    brake_status : STRING;
+    swing_position : STRING[10];
+    house_position : STRING[10];
+    brake_status : STRING[10];
+    button_released : BOOL := FALSE;
 END_VAR
 
-(* Initialisierung *)
-direction := TRUE; (* Start Richtung ist rechts *)
-running := FALSE;
-turn_count := 0;
+// Lichtsteuerung
+light_relay := start_button;
 
-(* Lichtsteuerung *)
-light_relay := TRUE;
+// Funktion zur Prüfung der Schaukelposition
+IF swing_right_switch THEN
+    swing_position := 'right';
+ELSIF swing_left_switch THEN
+    swing_position := 'left';
+ELSIF swing_middle_switch THEN
+    swing_position := 'middle';
+ELSE
+    swing_position := 'unknown';
+END_IF;
 
-(* Funktion zur Prüfung der Schaukelposition *)
-CASE TRUE OF
-    swing_right_switch: swing_position := 'right';
-    swing_left_switch: swing_position := 'left';
-    swing_middle_switch: swing_position := 'middle';
-    ELSE swing_position := 'unknown';
-END_CASE
+// Funktion zur Prüfung der Hausposition
+IF house_right_switch AND house_left_switch THEN
+    house_position := 'upright';
+ELSIF house_right_switch THEN
+    house_position := 'tilted_right';
+ELSIF house_left_switch THEN
+    house_position := 'tilted_left';
+ELSE
+    house_position := 'unknown';
+END_IF;
 
-(* Funktion zur Prüfung der Hausposition *)
-CASE TRUE OF
-    (house_right_switch AND house_left_switch): house_position := 'upright';
-    house_right_switch: house_position := 'tilted_right';
-    house_left_switch: house_position := 'tilted_left';
-    ELSE house_position := 'unknown';
-END_CASE
-
-(* Funktion zur Prüfung des Bremsstatus *)
+// Funktion zur Prüfung des Bremsstatus
 IF brake_switch THEN
     brake_status := 'open';
 ELSE
     brake_status := 'closed';
-END_IF
+END_IF;
 
-(* Startprozess *)
+// Startprozess
 IF start_button THEN
     start_time := TIME();
-    WHILE TIME() - start_time < T#3S DO
+    button_released := FALSE;
+    WHILE (TIME() - start_time) < T#3S DO
         IF NOT start_button THEN
+            button_released := TRUE;
             EXIT;
-        END_IF
+        END_IF;
     END_WHILE;
 
-    IF start_button THEN
+    IF start_button AND NOT button_released THEN
         brake_cylinder := FALSE;
         IF brake_status <> 'open' THEN
             EXIT;
-        END_IF
+        END_IF;
 
         running := TRUE;
         turn_count := 0;
         direction := TRUE; (* Start Richtung ist rechts *)
-        
+
+        // Initiale Schaukel-Routine starten
+        pneumatic_cylinder := TRUE;
+        start_time := TIME();
+        WHILE (TIME() - start_time) < T#3S DO
+            IF swing_position = 'right' THEN
+                EXIT;
+            END_IF;
+        END_WHILE;
+        pneumatic_cylinder := FALSE;
+
+        WHILE swing_position <> 'middle' DO END_WHILE;
+
+        start_time := TIME();
+        WHILE (TIME() - start_time) < T#3S DO
+            IF swing_position = 'middle' THEN
+                EXIT;
+            END_IF;
+        END_WHILE;
+
+        // Drehe das Haus nach links und deaktiviere die Schaukel
+        relay_turn_right := FALSE;
+        relay_turn_left := TRUE;
+        TIME := TIME();
+        WHILE (TIME() - start_time) < T#1S DO END_WHILE;
+        pneumatic_cylinder := FALSE;
+
         WHILE running DO
-            (* Not-Aus prüfen *)
+            // Not-Aus prüfen
             IF emergency_stop THEN
                 running := FALSE;
+                braking_routine(direction);
                 EXIT;
-            END_IF
+            END_IF;
 
-            (* Stop-Taste prüfen *)
+            // Stop-Taste prüfen
             IF stop_button THEN
                 running := FALSE;
+                braking_routine(direction);
                 EXIT;
-            END_IF
+            END_IF;
 
-            (* Haus drehen *)
-            IF direction THEN
-                relay_turn_right := TRUE;
-                relay_turn_left := FALSE;
-            ELSE
-                relay_turn_right := FALSE;
-                relay_turn_left := TRUE;
-            END_IF
-
-            (* Normale Schaukel-Routine *)
+            // Normale Schaukel-Routine starten
             pneumatic_cylinder := TRUE;
             start_time := TIME();
-            WHILE TIME() - start_time < T#3S DO
+            WHILE (TIME() - start_time) < T#3S DO
                 IF swing_position = 'right' THEN
                     EXIT;
-                END_IF
+                END_IF;
             END_WHILE;
             pneumatic_cylinder := FALSE;
 
             WHILE swing_position <> 'middle' DO END_WHILE;
 
             start_time := TIME();
-            WHILE TIME() - start_time < T#3S DO
+            WHILE (TIME() - start_time) < T#3S DO
                 IF swing_position = 'left' THEN
                     EXIT;
-                END_IF
+                END_IF;
             END_WHILE;
 
             WHILE swing_position <> 'middle' DO END_WHILE;
 
             pneumatic_cylinder := TRUE;
             start_time := TIME();
-            WHILE TIME() - start_time < T#3S DO
+            WHILE (TIME() - start_time) < T#3S DO
                 IF swing_position = 'right' THEN
                     EXIT;
-                END_IF
+                END_IF;
             END_WHILE;
             pneumatic_cylinder := FALSE;
 
-            (* Hausposition prüfen *)
+            // Hausposition prüfen
             WHILE house_position NOT IN ['tilted_right', 'tilted_left'] DO END_WHILE;
 
-            (* Überkopfposition erreicht *)
+            // Überkopfposition erreicht
             IF house_position IN ['tilted_right', 'tilted_left'] THEN
-                (* 15-Grad-Routine starten *)
-                pneumatic_cylinder := TRUE;
-                start_time := TIME();
-                WHILE TIME() - start_time < T#3S DO
-                    IF swing_position = 'right' THEN
-                        EXIT;
-                    END_IF
-                END_WHILE;
+                // Call swing_routine_15_degrees here
+                turn_count := turn_count + 1;
+                IF turn_count >= 2 THEN
+                    relay_turn_left := FALSE;
+                    WHILE house_position <> 'upright' DO END_WHILE;
+                    direction := NOT direction;
+                    turn_count := 0;
+                END_IF;
+            END_IF;
 
-                WHILE swing_position <> 'middle' DO END_WHILE;
-                pneumatic_cylinder := FALSE;
-
-                WHILE swing_position <> 'left' DO END_WHILE;
-                start_time := TIME();
-                WHILE TIME() - start_time < T#3S DO
-                    IF swing_position = 'left' THEN
-                        EXIT;
-                    END_IF
-                END_WHILE;
-
-                pneumatic_cylinder := TRUE;
-                start_time := TIME();
-                WHILE TIME() - start_time < T#3S DO
-                    IF swing_position = 'right' THEN
-                        EXIT;
-                    END_IF
-                END_WHILE;
-                pneumatic_cylinder := FALSE;
-            END_IF
-
-            (* Richtung wechseln nach zwei Umdrehungen *)
-            IF turn_count >= 2 THEN
-                relay_turn_right := FALSE;
-                relay_turn_left := FALSE;
-                WHILE house_position <> 'upright' DO END_WHILE;
-                direction := NOT direction;
-                turn_count := 0;
-            END_IF
-
-            (* Warte, bis das Haus wieder aufrecht steht *)
+            // Warte, bis das Haus wieder aufrecht steht
             WHILE house_position <> 'upright' DO END_WHILE;
-            relay_turn_right := FALSE;
             relay_turn_left := FALSE;
+            relay_turn_right := FALSE;
 
-            turn_count := turn_count + 1;
-        END_WHILE
+            IF turn_count >= 4 THEN
+                // Call braking_routine here
+                EXIT;
+            END_IF;
+        END_WHILE;
+    END_IF;
+END_IF;
 
-        (* Vorgang abgeschlossen *)
-        WHILE house_position <> 'upright' OR swing_position <> 'middle' DO END_WHILE;
-        brake_cylinder := TRUE;
-    END_IF
-END_IF
+// Set brake when house is in upright position
+IF house_position = 'upright' AND swing_position = 'middle' THEN
+    brake_cylinder := TRUE;
+END_IF;
