@@ -1,123 +1,101 @@
-// Deklaration der internen Variablen
-VAR
-    M1 : BOOL; // Prozess läuft
-    M2 : BOOL; // Not-Aus aktiviert
-    M3 : BOOL; // Schaukel rechts erreicht
-    M4 : BOOL; // Schaukel in der Mitte
-    M5 : BOOL; // Schaukel links erreicht
-    M6 : BOOL; // Haus aufrecht
-    M7 : BOOL; // Haus nach links geneigt
-    M8 : BOOL; // Haus nach rechts geneigt
-    Direction : BOOL; // TRUE = rechts, FALSE = links
-    Turn_Count : INT; // Umdrehungszähler
-END_VAR
+// Deklaration der Ein- und Ausgänge
+I1: house_left_switch
+I2: house_right_switch
+I3: swing_left_switch
+I4: swing_right_switch
+I5: swing_middle_switch
+I6: start_button
+I7: stop_button
+I8: emergency_stop
+I9: brake_switch
 
-// Licht einschalten
-LD     Start_Button
-=      Light_Relay
+Q1: pneumatic_cylinder
+Q2: relay_turn_right
+Q3: relay_turn_left
+Q4: brake_cylinder
+Q5: light_relay
 
-// Startprozess
-LD     Start_Button
-LDN    Emergency_Stop
-LDN    Stop_Button
-=      M1       // Prozess läuft
+// Hilfsrelais und Timer
+M1: running
+M2: direction (TRUE = right, FALSE = left)
+M3: turn_count
+T1: start_timer (3s)
+T2: initial_swing_timer (3s)
+T3: swing_middle_timer (3s)
+T4: braking_timer (3s)
+T5: swing_pulse_timer (0.1s - 0.5s)
+T6: swing_15deg_timer (3s)
 
-// Not-Aus
-LD     Emergency_Stop
-=      M2       // Not-Aus aktiviert
+// Lichtsteuerung
+Q5 = I6
 
-// Prozess stoppen
-LD     Stop_Button
-=      M2       // Stopp aktiviert
+// Initiale Startüberprüfung
+T1 = (I6 AND NOT (I6 AFTER 3s))  // Start-Taste muss 3 Sekunden gedrückt bleiben
+M1 = (T1 AND I6)                 // Startprozess beginnt, wenn T1 erfüllt ist
 
-// Wenn M2 aktiv ist, schalte das Relais aus
-LD     M2
-=      Relay_Turn_Right
-=      Relay_Turn_Left
-=      Pneumatic_Cylinder
-=      Brake_Cylinder
+// Bremsüberprüfung
+Q4 = (M1 AND NOT (I9 = LOW))  // Bremse wird deaktiviert, wenn der Startprozess läuft und die Bremse geöffnet ist
 
-// Bremse deaktivieren, wenn der Prozess läuft
-LD     M1
-=      Brake_Cylinder
-
-// Haus drehend
-LD     M1
-LDN    T5
-TON    T5, 1s
-LD     T5
-LD     Direction
-=      Relay_Turn_Right
-LDN    Direction
-=      Relay_Turn_Left
+// Initiale Schaukel-Routine
+T2 = (M1 AND I6)              // Initialer Schaukeltimer
+Q1 = (T2 AFTER 3s)            // Pneumatikzylinder wird aktiviert für 3 Sekunden
+Q1 = NOT (T2 AFTER 3s)        // Pneumatikzylinder wird deaktiviert nach 3 Sekunden
 
 // Normale Schaukel-Routine
-LD     M1
-TON    T1, 3s
-LD     T1
-=      Pneumatic_Cylinder
+T3 = (M1 AND I6)              // Schaukel-Mitte-Timer
+Q1 = (T3 AFTER 3s)            // Pneumatikzylinder wird aktiviert für 3 Sekunden
+Q1 = NOT (T3 AFTER 3s)        // Pneumatikzylinder wird deaktiviert nach 3 Sekunden
 
-LD     Swing_Right_Switch
-=      M3      // Schaukel rechts erreicht
+// Hausdrehrichtungen
+Q2 = (M2 AND I6)              // Dreht nach rechts, wenn M2 wahr ist
+Q3 = (NOT M2 AND I6)          // Dreht nach links, wenn M2 falsch ist
 
-LD     Swing_Middle_Switch
-=      M4      // Schaukel in der Mitte
+// Bremsroutine
+T4 = (M1 AND (I7 OR I8))      // Brems-Timer wird aktiviert, wenn Not-Aus oder Stop gedrückt wird
+Q2 = (T4 AND M2)              // Dreht nach links, wenn M2 wahr ist
+Q3 = (T4 AND NOT M2)          // Dreht nach rechts, wenn M2 falsch ist
 
-LD     Swing_Left_Switch
-=      M5      // Schaukel links erreicht
+// Schaukel in Mittelposition bringen
+T5 = (M1 AND I6)              // Schaukel-Pulstimer
+Q1 = (T5 AFTER 0.1s)          // Pneumatikzylinder wird kurz aktiviert
+Q1 = NOT (T5 AFTER 0.1s)      // Pneumatikzylinder wird deaktiviert
 
-LD     M3
-LDN    T2
-TON    T2, 3s
-LD     T2
-=      Pneumatic_Cylinder
-
-LD     M4
-TON    T3, 3s
-LD     T3
-LDN    M5
-TON    T4, 3s
-LD     T4
-=      Pneumatic_Cylinder
+// Not-Aus und Stop-Taste
+M1 = NOT (I7 OR I8)           // Prozess wird gestoppt, wenn Not-Aus oder Stop gedrückt wird
 
 // Schaukel-Routine bei 15 Grad
-LD     House_Right_Switch
-=      M8       // Haus nach rechts geneigt
+T6 = (M1 AND I6)              // 15-Grad-Schaukeltimer
+Q1 = (T6 AFTER 3s)            // Pneumatikzylinder wird aktiviert für 3 Sekunden
+Q1 = NOT (T6 AFTER 3s)        // Pneumatikzylinder wird deaktiviert nach 3 Sekunden
 
-LD     House_Left_Switch
-=      M7       // Haus nach links geneigt
+// Set brake when house is in upright position
+Q4 = (I1 AND I2 AND I5)  // Bremse wird aktiviert, wenn Haus und Schaukel in Ausgangsposition sind
 
-LD     M7
-TON    T6, 3s
-LD     T6
-=      Pneumatic_Cylinder
+// Komplettierungslogik für 15-Grad-Routine und Bremsvorgang
+IF (M1 AND direction = TRUE) THEN
+    // 15-Grad-Schaukel-Routine
+    Q1 = (T6 AFTER 3s)            // Pneumatikzylinder wird aktiviert für 3 Sekunden
+    Q1 = NOT (T6 AFTER 3s)        // Pneumatikzylinder wird deaktiviert nach 3 Sekunden
+    
+    // Bremsroutine
+    Q2 = (T4 AND direction = FALSE)  // Dreht nach links, wenn direction wahr ist
+    Q3 = (T4 AND direction = TRUE)   // Dreht nach rechts, wenn direction falsch ist
 
-LD     M4
-TON    T7, 3s
-LD     T7
-LDN    M5
-TON    T8, 3s
-LD     T8
-=      Pneumatic_Cylinder
+    // Schaukel in Mittelposition bringen
+    T5 = (M1 AND I6)              // Schaukel-Pulstimer
+    Q1 = (T5 AFTER 0.1s)          // Pneumatikzylinder wird kurz aktiviert
+    Q1 = NOT (T5 AFTER 0.1s)      // Pneumatikzylinder wird deaktiviert
+ENDIF
 
-LD     M5
-TON    T9, 3s
-LD     T9
-=      Pneumatic_Cylinder
+IF (turn_count >= 2) THEN
+    // Wechsel der Richtung
+    Q2 = FALSE
+    WHILE house_position <> 'upright' DO END_WHILE
+    direction = NOT direction
+    turn_count = 0
+ENDIF
 
-// Richtung wechseln nach zwei Umdrehungen
-LD     House_Right_Switch
-LD     House_Left_Switch
-CTU    C1, 2
-LD     C1
-=      Direction
-
-// Hausposition prüfen
-LD     House_Left_Switch
-LD     House_Right_Switch
-=      M6       // Haus aufrecht
-
-// Vorgang abschließen
-LD     M6
-LD     M4
-=      Brake_Cylinder
+// Sicherstellen, dass Bremse aktiviert wird, wenn Haus und Schaukel in Ausgangsposition sind
+IF house_left_switch AND house_right_switch AND swing_middle_switch THEN
+    Q4 = TRUE  // Bremse aktivieren
+ENDIF
