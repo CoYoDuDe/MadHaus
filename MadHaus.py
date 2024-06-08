@@ -198,24 +198,39 @@ def swing_routine_15_degrees(direction):
 
     deactivate_pneumatic_cylinder()
 
-def braking_routine():
+def braking_routine(direction):
     print("Bremsroutine gestartet...")
 
     def position_house():
         for _ in range(5):
-            # Bremsroutine links
-            for i in range(5):
-                turn_house_left()
-                time.sleep(0.1 * (i + 1))
-                stop_turning()
-                time.sleep(0.2 * (5 - i))
+            if direction == 'right':
+                # Bremsroutine links
+                for i in range(5):
+                    turn_house_left()
+                    time.sleep(0.1 * (i + 1))
+                    stop_turning()
+                    time.sleep(0.2 * (5 - i))
 
-            # Drehrichtung ändern
-            for i in range(3):
-                turn_house_right()
-                time.sleep(0.1 * (i + 1))
-                stop_turning()
-                time.sleep(0.2 * (3 - i))
+                # Drehrichtung ändern
+                for i in range(3):
+                    turn_house_right()
+                    time.sleep(0.1 * (i + 1))
+                    stop_turning()
+                    time.sleep(0.2 * (3 - i))
+            else:
+                # Bremsroutine rechts
+                for i in range(5):
+                    turn_house_right()
+                    time.sleep(0.1 * (i + 1))
+                    stop_turning()
+                    time.sleep(0.2 * (5 - i))
+
+                # Drehrichtung ändern
+                for i in range(3):
+                    turn_house_left()
+                    time.sleep(0.1 * (i + 1))
+                    stop_turning()
+                    time.sleep(0.2 * (3 - i))
 
             # Haus in die Position bringen, in der beide Magnetschalter aktiviert sind
             if GPIO.input(house_left_switch) == GPIO.LOW and GPIO.input(house_right_switch) == GPIO.LOW:
@@ -248,27 +263,6 @@ def braking_routine():
     while not swing_to_middle():
         pass
 
-    activate_brake()
-    time.sleep(1)  # Wartezeit zum Schließen der Bremse
-
-def stop_routine():
-    print("Stop-Routine gestartet...")
-
-    # Haus langsam anhalten
-    stop_turning()
-    time.sleep(1)  # Wartezeit zum Abbremsen
-
-    # Schaukel in die Mittelposition bringen
-    while check_swing_position() != 'middle':
-        if check_swing_position() == 'right':
-            activate_pneumatic_cylinder()
-        else:
-            deactivate_pneumatic_cylinder()
-        time.sleep(0.1)
-
-    deactivate_pneumatic_cylinder()
-
-    # Bremse aktivieren
     activate_brake()
     time.sleep(1)  # Wartezeit zum Schließen der Bremse
 
@@ -326,12 +320,14 @@ def main():
                         # Überprüfen des Not-Aus-Tasters
                         if GPIO.input(emergency_stop) == GPIO.LOW:
                             print("Not-Aus-Taste gedrückt. Vorgang wird gestoppt.")
+                            braking_routine(direction)
                             running = False
                             break
 
                         # Überprüfen des Stop-Tasters
                         if GPIO.input(stop_button) == GPIO.LOW:
                             print("Stop-Taste gedrückt. Vorgang wird gestoppt.")
+                            braking_routine(direction)
                             running = False
                             break
 
@@ -366,7 +362,7 @@ def main():
 
                         # Stop-Routine nach zwei vollen Umdrehungen in beide Richtungen
                         if turn_count >= 4:
-                            braking_routine()
+                            braking_routine(direction)
                             break
 
                 print("Vorgang abgeschlossen. Haus ist zurück in der Ausgangsposition.")
