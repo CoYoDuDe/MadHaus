@@ -100,6 +100,29 @@ def check_brake_status():
     else:
         return 'closed'
 
+def swing_routine_initial():
+    print("Initiale Schaukel-Routine gestartet...")
+
+    # Erste Schwingung nach rechts
+    activate_pneumatic_cylinder()
+    start_time = time.time()
+    while (time.time() - start_time) < 3:
+        if check_swing_position() == 'right':
+            break
+        time.sleep(0.1)
+    deactivate_pneumatic_cylinder()
+
+    # Schaukel schwingt zur Mitte
+    while check_swing_position() != 'middle':
+        time.sleep(0.1)
+
+    # 3 Sekunden warten oder bis Position Mitte erreicht wird
+    start_time = time.time()
+    while (time.time() - start_time) < 3:
+        if check_swing_position() == 'middle':
+            break
+        time.sleep(0.1)
+
 def normal_swing_routine():
     print("Normale Schaukel-Routine gestartet...")
 
@@ -175,6 +198,80 @@ def swing_routine_15_degrees(direction):
 
     deactivate_pneumatic_cylinder()
 
+def braking_routine():
+    print("Bremsroutine gestartet...")
+
+    def position_house():
+        for _ in range(5):
+            # Bremsroutine links
+            for i in range(5):
+                turn_house_left()
+                time.sleep(0.1 * (i + 1))
+                stop_turning()
+                time.sleep(0.2 * (5 - i))
+
+            # Drehrichtung ändern
+            for i in range(3):
+                turn_house_right()
+                time.sleep(0.1 * (i + 1))
+                stop_turning()
+                time.sleep(0.2 * (3 - i))
+
+            # Haus in die Position bringen, in der beide Magnetschalter aktiviert sind
+            if GPIO.input(house_left_switch) == GPIO.LOW and GPIO.input(house_right_switch) == GPIO.LOW:
+                return True
+            else:
+                if GPIO.input(house_right_switch) == GPIO.LOW:
+                    turn_house_left()
+                elif GPIO.input(house_left_switch) == GPIO.LOW:
+                    turn_house_right()
+                else:
+                    stop_turning()
+                time.sleep(0.1)
+        return False
+
+    def swing_to_middle():
+        pulse_time = 0.1
+        for _ in range(5):
+            activate_pneumatic_cylinder()
+            time.sleep(pulse_time)
+            deactivate_pneumatic_cylinder()
+            time.sleep(1)
+            if check_swing_position() == 'middle':
+                return True
+            pulse_time += 0.1
+        return False
+
+    while not position_house():
+        pass
+
+    while not swing_to_middle():
+        pass
+
+    activate_brake()
+    time.sleep(1)  # Wartezeit zum Schließen der Bremse
+
+def stop_routine():
+    print("Stop-Routine gestartet...")
+
+    # Haus langsam anhalten
+    stop_turning()
+    time.sleep(1)  # Wartezeit zum Abbremsen
+
+    # Schaukel in die Mittelposition bringen
+    while check_swing_position() != 'middle':
+        if check_swing_position() == 'right':
+            activate_pneumatic_cylinder()
+        else:
+            deactivate_pneumatic_cylinder()
+        time.sleep(0.1)
+
+    deactivate_pneumatic_cylinder()
+
+    # Bremse aktivieren
+    activate_brake()
+    time.sleep(1)  # Wartezeit zum Schließen der Bremse
+
 def main():
     try:
         # Schalte die Innenbeleuchtung ein
@@ -187,14 +284,15 @@ def main():
 
                 # Warte 3 Sekunden und prüfe, ob der Start-Button noch gedrückt ist
                 start_time = time.time()
+                button_released = False
                 while (time.time() - start_time) < 3:
                     if GPIO.input(start_button) != GPIO.LOW:
-                        print("Start-Taste nicht mehr gedrückt. Vorgang abgebrochen.")
+                        button_released = True
                         break
                     time.sleep(0.1)
 
                 # Falls die Start-Taste 3 Sekunden lang gedrückt blieb, starte den Vorgang
-                if GPIO.input(start_button) == GPIO.LOW:
+                if GPIO.input(start_button) == GPIO.LOW and not button_released:
                     print("Start-Taste bestätigt. Vorgang beginnt...")
 
                     # Deaktiviere Bremse und überprüfe den Zustand
@@ -208,10 +306,27 @@ def main():
                     direction = 'right'
                     running = True
 
+                    # Initiale Schaukel-Routine starten
+                    swing_routine_initial()
+
+                    # Warte, bis die Schaukel zur Mitte zurückkehrt oder 3 Sekunden vergangen sind
+                    start_time = time.time()
+                    while (time.time() - start_time) < 3:
+                        if check_swing_position() == 'middle':
+                            break
+                        time.sleep(0.1)
+
+                    # Drehe das Haus nach links und deaktiviere die Schaukel
+                    print("Drehe das Haus nach links...")
+                    turn_house_left()
+                    time.sleep(1)  # Wartezeit, bevor die Schaukel deaktiviert wird
+                    deactivate_pneumatic_cylinder()
+
                     while running:
                         # Überprüfen des Not-Aus-Tasters
                         if GPIO.input(emergency_stop) == GPIO.LOW:
                             print("Not-Aus-Taste gedrückt. Vorgang wird gestoppt.")
+                            running = False
                             break
 
                         # Überprüfen des Stop-Tasters
@@ -219,14 +334,6 @@ def main():
                             print("Stop-Taste gedrückt. Vorgang wird gestoppt.")
                             running = False
                             break
-
-                        # Drehe das Haus in die aktuelle Richtung
-                        if direction == 'right':
-                            print("Drehe das Haus nach rechts...")
-                            turn_house_right()
-                        else:
-                            print("Drehe das Haus nach links...")
-                            turn_house_left()
 
                         # Normale Schaukel-Routine starten
                         normal_swing_routine()
@@ -257,8 +364,13 @@ def main():
                         # Erhöhe die Drehzahl nach jeder zweiten Drehung
                         turn_count += 1
 
+                        # Stop-Routine nach zwei vollen Umdrehungen in beide Richtungen
+                        if turn_count >= 4:
+                            braking_routine()
+                            break
+
                 print("Vorgang abgeschlossen. Haus ist zurück in der Ausgangsposition.")
-                
+
                 # Überprüfen, ob das Haus in der normalen Position ist und die Schaukel in der Mitte ist
                 while check_house_position() != 'upright' or check_swing_position() != 'middle':
                     time.sleep(0.1)
